@@ -42,17 +42,20 @@ export class ResponseMapper {
     let perPage = resolvePath(payload, this.config.listLimitPath, undefined)
 
     if (perPage === undefined || perPage <= 0) {
-      const dataLength = Array.isArray(data) ? data.length : 0
-      perPage = dataLength > 0 ? dataLength : 10
+      perPage = 10
     }
 
     const skip = resolvePath(payload, this.config.listSkipPath, undefined)
 
-    if (this.config.transformPage && currentPage !== undefined) {
+    if (skip !== undefined && currentPage === 1 && !this.config.listPagePath) {
+      currentPage = Math.floor(skip / perPage) + 1
+    }
+
+    if (this.config.transformPage) {
       currentPage = this.config.transformPage(currentPage, { skip, limit: perPage, total })
     }
 
-    const totalPages = perPage > 0 ? Math.ceil(total / perPage) : 1
+    const totalPages = Math.max(1, perPage > 0 ? Math.ceil(total / perPage) : 1)
     let finalCurrentPage = currentPage
 
     if (finalCurrentPage > totalPages) {

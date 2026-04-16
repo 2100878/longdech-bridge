@@ -7,8 +7,9 @@ type QueryValue = string | number | boolean | QueryValue[] | QueryParams | null 
  */
 function stableParams(params: QueryParams): QueryParams {
   const stableValue = (value: QueryValue): QueryValue => {
+    if (value === null || value === undefined) return undefined
     if (Array.isArray(value)) return value.map(stableValue)
-    if (value && typeof value === "object") return stableParams(value as QueryParams)
+    if (typeof value === "object") return stableParams(value as QueryParams)
     return value
   }
 
@@ -16,7 +17,7 @@ function stableParams(params: QueryParams): QueryParams {
     .sort()
     .reduce((acc, key) => {
       const value = params[key]
-      if (value === undefined) return acc
+      if (value === undefined || value === null) return acc
       acc[key] = stableValue(value as QueryValue)
       return acc
     }, {} as QueryParams)

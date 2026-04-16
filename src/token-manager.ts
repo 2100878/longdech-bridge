@@ -77,11 +77,11 @@ export class TokenManager {
    * Returns a valid access token.
    * Logic: Valid? -> Return. Expired? -> Attempt Refresh -> Queue concurrent requests.
    */
-  async getToken(): Promise<string> {
-    if (this.isDestroyed) return ""
+  async getToken(): Promise<string | null> {
+    if (this.isDestroyed) return null
 
     const currentAccessToken = this.getAccessToken()
-    if (!currentAccessToken) return ""
+    if (!currentAccessToken) return null
 
     // 1. If token is still valid, return it immediately
     if (this.isValidToken(currentAccessToken)) return currentAccessToken
@@ -90,14 +90,14 @@ export class TokenManager {
     const currentRefreshToken = this.getRefreshToken()
     if (!currentRefreshToken || !this.isValidToken(currentRefreshToken)) {
       this.config?.onInvalidRefreshToken?.()
-      return ""
+      return null
     }
 
     const executeRefreshToken = this.config?.executeRefreshToken
-    if (!executeRefreshToken) return ""
+    if (!executeRefreshToken) return null
 
     // 3. Start or wait for refresh process
-    return new Promise<string>((resolve, reject) => {
+    return new Promise<string | null>((resolve, reject) => {
       const timeoutMs = this.config?.refreshTimeout ?? 10000
       const timeout = setTimeout(() => {
         reject(new Error(`Refresh token timeout after ${timeoutMs}ms`))
@@ -108,7 +108,7 @@ export class TokenManager {
         if (typeof nextToken === "string" && nextToken.length > 0) {
           resolve(nextToken)
         } else {
-          reject(new Error("Unable to refresh access token"))
+          resolve(null)
         }
       })
 
@@ -152,9 +152,7 @@ export class TokenManager {
 
   private finishRefresh(accessToken: string | null) {
     this.isRefreshing = false
-    if (!this.isDestroyed) {
-      this.event.emit("refreshDone", accessToken)
-    }
+    this.event.emit("refreshDone", accessToken)
   }
 
   destroy() {

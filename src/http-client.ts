@@ -172,9 +172,10 @@ export class HttpClient {
    * Generate a unique key for GET request deduplication.
    */
   private getDedupeKey(url: string, options: HttpRequestOptions): string {
+    const method = options.method ?? "GET"
     const headersHash = options.headers ? JSON.stringify(options.headers) : ""
     const skipAuth = options.skipAuth ? "skip" : ""
-    return JSON.stringify({ url, params: options.params, headersHash, skipAuth })
+    return JSON.stringify({ method, url, params: options.params, headersHash, skipAuth })
   }
 
   /**
@@ -197,7 +198,8 @@ export class HttpClient {
 
     const finalTransform = requestTransform ?? this.transformParams
     const transformedParams = finalTransform?.(params ?? {}) ?? params
-    const transformedBody = this.transformRequest?.(body) ?? body
+    // Bug fix 5: Dùng ternary thay vì ?? để transformRequest trả về null/0/false vẫn được giữ
+    const transformedBody = this.transformRequest ? this.transformRequest(body) : body
 
     const requestConfig = {
       method,

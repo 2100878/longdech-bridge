@@ -6,6 +6,7 @@ import {
   type UseQueryOptions,
   type UseInfiniteQueryOptions,
   type UseInfiniteQueryResult,
+  type InfiniteData,
 } from "@tanstack/react-query"
 
 import { HttpClient, type HttpQueryParamValue, type HttpQueryParams } from "./http-client"
@@ -188,13 +189,13 @@ export function createServiceProvider(client: HttpClient, defaultMapping?: Mappi
           UseInfiniteQueryOptions<
             InfiniteResponse<T, C>,
             Error,
-            InfiniteResponse<T, C>,
+            InfiniteData<InfiniteResponse<T, C>>,
             ReturnType<typeof keys.infinite>,
             C | undefined
           >,
           "queryKey" | "queryFn" | "initialPageParam" | "getNextPageParam"
         >
-      ): UseInfiniteQueryResult<InfiniteResponse<T, C>, Error> {
+      ): UseInfiniteQueryResult<InfiniteData<InfiniteResponse<T, C>>, Error> {
         return useInfiniteQuery({
           queryKey: keys.infinite(params),
           queryFn: ({ pageParam }) => api.infinite(params, pageParam as C | undefined),
@@ -251,8 +252,8 @@ export function createServiceProvider(client: HttpClient, defaultMapping?: Mappi
         return useMutation({
           mutationFn: api.remove,
           onSuccess: (_, id) => {
-            qc.invalidateQueries({ queryKey: keys.lists() })
             qc.removeQueries({ queryKey: keys.detail(id) })
+            qc.invalidateQueries({ queryKey: keys.lists() })
           },
         })
       },
