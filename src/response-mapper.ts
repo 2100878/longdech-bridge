@@ -38,29 +38,39 @@ export class ResponseMapper {
     const total = resolvePath(payload, this.config.listTotalPath, 0)
 
     let currentPage = resolvePath(payload, this.config.listPagePath, 1)
-    const perPage = resolvePath(
-      payload,
-      this.config.listLimitPath,
-      Array.isArray(data) ? data.length : 10
-    )
+
+    let perPage = resolvePath(payload, this.config.listLimitPath, undefined)
+
+    if (perPage === undefined || perPage <= 0) {
+      const dataLength = Array.isArray(data) ? data.length : 0
+      perPage = dataLength > 0 ? dataLength : 10
+    }
 
     const skip = resolvePath(payload, this.config.listSkipPath, undefined)
 
-    // Apply page transformation if needed
     if (this.config.transformPage && currentPage !== undefined) {
       currentPage = this.config.transformPage(currentPage, { skip, limit: perPage, total })
     }
 
     const totalPages = perPage > 0 ? Math.ceil(total / perPage) : 1
-    const hasNextPage = currentPage < totalPages
-    const nextPage = hasNextPage ? currentPage + 1 : null
-    const hasPreviousPage = currentPage > 1
-    const prevPage = hasPreviousPage ? currentPage - 1 : null
+    let finalCurrentPage = currentPage
+
+    if (finalCurrentPage > totalPages) {
+      finalCurrentPage = totalPages
+    }
+    if (finalCurrentPage < 1) {
+      finalCurrentPage = 1
+    }
+
+    const hasNextPage = finalCurrentPage < totalPages
+    const nextPage = hasNextPage ? finalCurrentPage + 1 : null
+    const hasPreviousPage = finalCurrentPage > 1
+    const prevPage = hasPreviousPage ? finalCurrentPage - 1 : null
 
     return {
       data: Array.isArray(data) ? (data as T[]) : [],
       meta: {
-        currentPage,
+        currentPage: finalCurrentPage,
         perPage,
         nextPage,
         prevPage,
