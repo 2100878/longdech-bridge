@@ -39,18 +39,12 @@ export interface HttpClientConfig extends CreateAxiosDefaults {
    */
   attachDomain?: (request: InternalAxiosRequestConfig) => void | Promise<void>
   enableDeduplication?: boolean
-  /**
-   * Custom error handler - FE tự implement
-   */
-  onError?: (error: unknown, requestConfig: HttpRequestOptions) => void
-  /**
-   * Interceptor để xử lý response trước khi trả về
-   */
-  transformResponse?: <T>(response: AxiosResponse<T>) => T
 }
 
 /**
  * Axios-based HTTP client.
+ * Tất cả enrichment (token, locale, domain) được config một chỗ qua HttpClientConfig.
+ * Error handling và logging để FE tự implement.
  */
 export class HttpClient {
   protected instance: ReturnType<typeof axios.create>
@@ -60,8 +54,6 @@ export class HttpClient {
   private readonly attachDomain?: HttpClientConfig["attachDomain"]
   private readonly enableDeduplication: boolean
   private pendingRequests: Map<string, Promise<unknown>> = new Map()
-  private readonly onError?: HttpClientConfig["onError"]
-  private readonly transformResponse?: HttpClientConfig["transformResponse"]
 
   constructor(config: HttpClientConfig) {
     const {
@@ -70,8 +62,6 @@ export class HttpClient {
       attachLocale,
       attachDomain,
       enableDeduplication = true,
-      onError,
-      transformResponse,
       ...axiosConfig
     } = config
 
@@ -80,8 +70,6 @@ export class HttpClient {
     this.attachLocale = attachLocale
     this.attachDomain = attachDomain
     this.enableDeduplication = enableDeduplication
-    this.onError = onError
-    this.transformResponse = transformResponse
     this.instance = axios.create(axiosConfig)
 
     this.instance.interceptors.request.use(
@@ -90,18 +78,13 @@ export class HttpClient {
         return request
       },
       (error: AxiosError) => {
-        this.onError?.(error, {})
         return Promise.reject(error)
       }
     )
 
     this.instance.interceptors.response.use(
-      (response) => {
-        return this.transformResponse ? this.transformResponse(response) : response
-      },
+      (response) => response,
       (error: AxiosError) => {
-        const requestConfig = error.config as HttpRequestOptions | undefined
-        this.onError?.(error, requestConfig || {})
         return Promise.reject(error)
       }
     )
@@ -109,6 +92,7 @@ export class HttpClient {
 
   /**
    * Enrichment pipeline: token → locale → domain.
+   * Override method này trong subclass nếu cần custom thêm.
    */
   protected async enrichRequest(request: InternalAxiosRequestConfig) {
     const skipAuth = (request as any).skipAuth
@@ -193,24 +177,21 @@ export class HttpClient {
   /**
    * Upload file với multipart/form-data
    */
-  upload<TResponse, TBody = FormData>(
+  upload<TResponse>(
     url: string,
-    formData: TBody,
-    options?: Omit<HttpRequestOptions<TBody>, "body" | "method">
+    formData: FormData,
+    options?: Omit<HttpRequestOptions, "body" | "method">
   ): Promise<TResponse> {
     const headers: Record<string, string> = {
       "Content-Type": "multipart/form-data",
+      ...(options?.headers || {}),
     }
 
-    if (options?.headers) {
-      Object.assign(headers, options.headers)
-    }
-
-    return this.request<TResponse, TBody>(url, {
+    return this.request<TResponse>(url, {
       ...options,
       method: "POST",
       body: formData,
       headers,
-    } as HttpRequestOptions<TBody>)
+    })
   }
 }
