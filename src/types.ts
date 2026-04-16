@@ -54,6 +54,7 @@ export interface MappingConfig {
   listTotalPath?: PathResolver<any, number>
   listPagePath?: PathResolver<any, number>
   listLimitPath?: PathResolver<any, number>
+  listSkipPath?: PathResolver<any, number>
 
   // Single item
   itemDataPath?: PathResolver<any, any>
@@ -64,7 +65,7 @@ export interface MappingConfig {
   infinitePrevCursorPath?: PathResolver<any, any>
 
   // Transformers
-  transformPage?: (page: number) => number
+  transformPage?: (page: number, context?: TransformPageContext) => number
   transformCursor?: (cursor: any) => any
 }
 
@@ -76,6 +77,15 @@ export interface ApiErrorResponse {
   message: string
   statusCode: number
   errors?: Record<string, string[]>
+}
+
+/**
+ * Context passed to transformPage.
+ */
+export interface TransformPageContext {
+  skip?: number
+  limit?: number
+  total?: number
 }
 
 /**

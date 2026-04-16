@@ -44,9 +44,11 @@ export class ResponseMapper {
       Array.isArray(data) ? data.length : 10
     )
 
+    const skip = resolvePath(payload, this.config.listSkipPath, undefined)
+
     // Apply page transformation if needed
     if (this.config.transformPage && currentPage !== undefined) {
-      currentPage = this.config.transformPage(currentPage)
+      currentPage = this.config.transformPage(currentPage, { skip, limit: perPage, total })
     }
 
     const totalPages = perPage > 0 ? Math.ceil(total / perPage) : 1

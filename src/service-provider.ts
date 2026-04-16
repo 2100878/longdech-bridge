@@ -46,6 +46,12 @@ interface ServiceOptions<T, Params extends Record<string, unknown>, C extends Cu
    * Functional override for getNextPageParam.
    */
   getNextPageParam?: (lastPage: InfiniteResponse<T, C>) => C | undefined
+
+  /**
+   * Transform params before sending request.
+   */
+  transformParams?: (params: HttpQueryParams) => HttpQueryParams
+
   /**
    * Direct API method overrides for edge cases.
    */
@@ -100,8 +106,13 @@ export function createServiceProvider(client: HttpClient, defaultMapping?: Mappi
        */
       list:
         options?.overrides?.list ??
-        ((params?: Params): Promise<ListResponse<T>> =>
-          client.get<unknown>(baseUrl, toRequestParams(params)).then(mapListResponse)),
+        ((params?: Params): Promise<ListResponse<T>> => {
+          let requestParams = toRequestParams(params)
+          if (options?.transformParams) {
+            requestParams = options.transformParams(requestParams ?? {})
+          }
+          return client.get<unknown>(baseUrl, requestParams).then(mapListResponse)
+        }),
 
       /**
        * Get infinite list (cursor or page based).
@@ -109,12 +120,14 @@ export function createServiceProvider(client: HttpClient, defaultMapping?: Mappi
       infinite:
         options?.overrides?.infinite ??
         ((params?: Params, page?: C): Promise<InfiniteResponse<T, C>> => {
-          return client
-            .get<unknown>(baseUrl, {
-              ...toRequestParams(params),
-              [pageParamKey]: page as HttpQueryParamValue,
-            })
-            .then(mapInfiniteResponse)
+          let requestParams = {
+            ...toRequestParams(params),
+            [pageParamKey]: page as HttpQueryParamValue,
+          }
+          if (options?.transformParams) {
+            requestParams = options.transformParams(requestParams)
+          }
+          return client.get<unknown>(baseUrl, requestParams).then(mapInfiniteResponse)
         }),
 
       /**

@@ -5,6 +5,7 @@ import axios, {
   type InternalAxiosRequestConfig,
 } from "axios"
 import { TokenManager } from "./token-manager"
+import { ApiErrorResponse } from "./types"
 
 export type HttpQueryParamValue = string | number | boolean | undefined
 export type HttpQueryParams = Record<string, HttpQueryParamValue>
@@ -23,6 +24,11 @@ export interface HttpRequestOptions<TBody = unknown> {
    * Skip request deduplication.
    */
   skipDeduplication?: boolean
+
+  /**
+   * Transform params before sending request.
+   */
+  transformParams?: (params: HttpQueryParams) => HttpQueryParams
 }
 
 export interface HttpClientConfig extends CreateAxiosDefaults {
@@ -41,6 +47,23 @@ export interface HttpClientConfig extends CreateAxiosDefaults {
    * Global toggle for request deduplication. Default: true.
    */
   enableDeduplication?: boolean
+  /**
+   * Transform params before sending request.
+   */
+  transformParams?: (params: HttpQueryParams) => HttpQueryParams
+  /**
+   * Transform error before throwing.
+   */
+  transformError?: (error: unknown) => ApiErrorResponse
+
+  /**
+   * Transform request body before sending request.
+   */
+  transformRequest?: (body: any) => any
+
+  onRequest?: (config: InternalAxiosRequestConfig) => void
+  onResponse?: (response: AxiosResponse) => void
+  onError?: (error: AxiosError) => void
 }
 
 /**
@@ -54,6 +77,12 @@ export class HttpClient {
   private readonly attachLocale?: HttpClientConfig["attachLocale"]
   private readonly attachDomain?: HttpClientConfig["attachDomain"]
   private readonly enableDeduplication: boolean
+  private readonly transformParams?: HttpClientConfig["transformParams"]
+  private readonly transformError?: HttpClientConfig["transformError"]
+  private readonly transformRequest?: HttpClientConfig["transformRequest"]
+  private readonly onRequest?: HttpClientConfig["onRequest"]
+  private readonly onResponse?: HttpClientConfig["onResponse"]
+  private readonly onError?: HttpClientConfig["onError"]
   private pendingRequests: Map<string, Promise<unknown>> = new Map()
 
   constructor(config: HttpClientConfig) {
@@ -63,6 +92,12 @@ export class HttpClient {
       attachLocale,
       attachDomain,
       enableDeduplication = true,
+      transformParams,
+      transformError,
+      transformRequest,
+      onRequest,
+      onResponse,
+      onError,
       ...axiosConfig
     } = config
 
@@ -71,19 +106,39 @@ export class HttpClient {
     this.attachLocale = attachLocale
     this.attachDomain = attachDomain
     this.enableDeduplication = enableDeduplication
+    this.transformParams = transformParams
+    this.transformError = transformError
+    this.transformRequest = transformRequest
+    this.onRequest = onRequest
+    this.onResponse = onResponse
+    this.onError = onError
     this.instance = axios.create(axiosConfig)
 
     this.instance.interceptors.request.use(
       async (request) => {
+        this.onRequest?.(request)
         await this.enrichRequest(request)
         return request
       },
-      (error: AxiosError) => Promise.reject(error)
+      (error: AxiosError) => {
+        this.onError?.(error)
+        return Promise.reject(error)
+      }
     )
 
     this.instance.interceptors.response.use(
-      (response) => response,
-      (error: AxiosError) => Promise.reject(error)
+      (response) => {
+        this.onResponse?.(response)
+        return response
+      },
+      (error: AxiosError) => {
+        this.onError?.(error)
+        if (this.transformError && error.response?.data) {
+          const transformed = this.transformError(error.response.data)
+          return Promise.reject(transformed)
+        }
+        return Promise.reject(error)
+      }
     )
   }
 
@@ -121,14 +176,27 @@ export class HttpClient {
     url: string,
     options: HttpRequestOptions<TBody> = {}
   ): Promise<TResponse> {
-    const { method = "GET", body, headers, params, signal, skipAuth, skipDeduplication } = options
+    const {
+      method = "GET",
+      body,
+      headers,
+      params,
+      signal,
+      skipAuth,
+      skipDeduplication,
+      transformParams: requestTransform,
+    } = options
+
+    const finalTransform = requestTransform ?? this.transformParams
+    const transformedParams = finalTransform?.(params ?? {}) ?? params
+    const transformedBody = this.transformRequest?.(body) ?? body
 
     const requestConfig = {
       method,
       url,
-      data: body,
+      data: transformedBody,
       headers,
-      params,
+      params: transformedParams,
       signal,
       skipAuth,
     }
